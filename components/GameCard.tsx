@@ -1,10 +1,9 @@
 // app/components/GameCard.tsx
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { BASE_URL } from "../api/api";
+import { BASE_URL } from "../app/api/api";
 
-
-export default function GameCard({ game, onPress, onBuy }) {
+export default function GameCard({ game, onPress, onBuy, buyLabel = "Comprar" }: any) {
   return (
     <View style={styles.card}>
       <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
@@ -25,11 +24,10 @@ export default function GameCard({ game, onPress, onBuy }) {
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{game.name}</Text>
         <Text style={styles.subtitle} numberOfLines={2}>{game.short || game.description}</Text>
-
         <View style={styles.row}>
           <Text style={styles.price}>${game.price}</Text>
           <TouchableOpacity style={styles.buyBtn} onPress={onBuy}>
-            <Text style={styles.buyText}>Comprar</Text>
+            <Text style={styles.buyText}>{buyLabel}</Text>
           </TouchableOpacity>
         </View>
       </View>

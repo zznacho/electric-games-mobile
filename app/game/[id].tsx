@@ -1,38 +1,147 @@
 // app/game/[id].tsx
-import { useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import api from "../../api/api";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState, useRef } from "react";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native";
+import api from "../api/api";
+import { getToken } from "../auth/authStore";
+
+interface Game {
+  _id: string;
+  name: string;
+  description: string;
+  image: string;
+  price: number;
+}
 
 export default function GameDetail() {
   const { id } = useLocalSearchParams();
-  const [game, setGame] = useState(null);
+  const router = useRouter();
+  const [game, setGame] = useState<Game | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    api.get(`/games/${id}`).then(r => setGame(r.data)).catch(console.log);
+
+    api.get(`/games/${id}`)
+      .then(r => setGame(r.data))
+      .catch(console.log);
   }, [id]);
 
-  if (!game) return <View style={styles.page}><Text style={{color:"#fff"}}>Cargando...</Text></View>;
+  // banner state and timer (must be declared unconditionally at top-level of component)
+  const [bannerMsg, setBannerMsg] = useState<string | null>(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const timerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  function dismissBanner() {
+    setShowBanner(false);
+    setBannerMsg(null);
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }
+
+  async function handleBuy() {
+    try {
+      console.log("DEBUG: handleBuy called, id:", id);
+      
+      if (!id) {
+        Alert.alert("Error", "ID del juego no disponible");
+        return;
+      }
+
+      const token = await getToken();
+      console.log("DEBUG: token from storage:", token);
+
+      if (!token) {
+        Alert.alert("Debes iniciar sesión", "Inicia sesión para comprar juegos.");
+        router.push("/(auth)/login");
+        return;
+      }
+
+      const endpoint = `/purchases/${id}`;
+      console.log("DEBUG: haciendo POST a:", endpoint);
+      console.log("DEBUG: token enviado:", token);
+
+      const res = await api.post(
+        endpoint,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log("DEBUG: respuesta compra:", res);
+      console.log("DEBUG: status:", res.status);
+      console.log("DEBUG: data:", res.data);
+      
+      Alert.alert("Éxito", `Compra iniciada para: ${game?.name || 'juego'}. Estado: ${res.data?.status}`);
+      router.push("/cart");
+    } catch (error: any) {
+      console.log("DEBUG: error en handleBuy (raw):", JSON.stringify(error, null, 2));
+      console.log("DEBUG: error.response:", error?.response);
+      console.log("DEBUG: error.response?.data:", error?.response?.data);
+      console.log("DEBUG: error.message:", error?.message);
+
+      const errorMsg = error?.response?.data?.msg || error?.response?.data?.message;
+      const statusCode = error?.response?.status;
+
+      // Manejo específico de errores
+      if (statusCode === 400 && errorMsg?.includes("Ya compraste")) {
+        const msg = `Ya tienes "${game?.name}" en tu biblioteca.\n\nVe a tu biblioteca para acceder.`;
+        // Mostrar banner en pantalla en vez de un Alert
+        setBannerMsg(msg);
+        setShowBanner(true);
+        // redirigir automáticamente después de un corto delay
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+          router.push("/(tabs)/library");
+        }, 2600) as any;
+      } else if (statusCode === 401 || statusCode === 403) {
+        Alert.alert("Acceso denegado", "Debes iniciar sesión para comprar");
+        router.push("/(auth)/login");
+      } else {
+        const serverMsg = errorMsg || error?.message || "No se pudo procesar la compra";
+        Alert.alert("Error en compra", String(serverMsg));
+      }
+    }
+  }
+
+
+  if (!game) return (
+    <View style={styles.page}>
+      <Text style={{color:"#fff"}}>Cargando...</Text>
+    </View>
+  );
 
   return (
-    <ScrollView style={styles.page}>
-      <Image 
-  source={{ uri: `http://192.168.0.17:5000${game.image}` }} 
-  style={styles.cover} 
-/>
+    <View style={{ flex: 1 }}>
+      {showBanner && bannerMsg ? (
+        <View style={styles.banner}>
+          <Text style={styles.bannerText}>{bannerMsg}</Text>
+          <TouchableOpacity onPress={dismissBanner} style={styles.bannerClose}>
+            <Text style={styles.bannerCloseText}>Cerrar</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
+      <ScrollView style={styles.page}>
+      <Image 
+        source={{ uri: `http://192.168.0.17:5000${game.image}` }} 
+        style={styles.cover} 
+      />
       <View style={styles.content}>
         <Text style={styles.title}>{game.name}</Text>
         <Text style={styles.desc}>{game.description}</Text>
 
         <View style={{ flexDirection: "row", marginTop: 16, gap: 12 }}>
-          <TouchableOpacity style={styles.buyBtn}>
+          <TouchableOpacity style={styles.buyBtn} onPress={handleBuy}>
             <Text style={styles.buyText}>Comprar ${game.price}</Text>
           </TouchableOpacity>
         </View>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -44,4 +153,21 @@ const styles = StyleSheet.create({
   desc: { color: "#99a1ab", marginTop: 8 },
   buyBtn: { backgroundColor: "#4caf50", padding: 12, borderRadius: 8 },
   buyText: { color: "#fff", fontWeight: "700" },
+  banner: {
+    position: "absolute",
+    top: 40,
+    left: 16,
+    right: 16,
+    backgroundColor: "#ffea9b",
+    padding: 12,
+    borderRadius: 8,
+    zIndex: 1000,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bannerText: { color: "#000", flex: 1, marginRight: 8 },
+  bannerClose: { paddingHorizontal: 8, paddingVertical: 4 },
+  bannerCloseText: { color: "#000", fontWeight: "700" },
 });
+

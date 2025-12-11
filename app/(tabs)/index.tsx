@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, FlatList, Dimensions } from "react-native";
 import React, { useEffect, useState } from "react";
 import GameCard from "../../components/GameCard";
-import api from "../../api/api";
+import api from "../api/api";
 import { useRouter } from "expo-router";
 
 const numCols = 2;
@@ -43,7 +43,8 @@ export default function HomeScreen() {
               <GameCard
                 game={item}
                 onPress={() => router.push(`/game/${item._id}`)}
-                onBuy={() => console.log("Comprar", item._id)}
+                onBuy={() => router.push(`/game/${item._id}`)}
+                buyLabel="Ver"
               />
             </View>
           )}

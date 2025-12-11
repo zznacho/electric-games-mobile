@@ -1,9 +1,9 @@
 // app/(tabs)/games.tsx
-import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Dimensions, FlatList, StyleSheet, View } from "react-native";
-import api from "../api/api";
+import { router } from "expo-router";
 import GameCard from "../components/GameCard";
+import api from "../app/api/api";
 
 const numCols = 2;
 const screenW = Dimensions.get("window").width;
@@ -33,7 +33,7 @@ export default function Games() {
           <View style={{ width: itemW }}>
             <GameCard
               game={item}
-              onPress={() => navigation.push("/game/" + item._id)}
+              onPress={() => router.push(`/game/${item._id}`)}
               onBuy={() => router.push(`/cart?add=${item._id}`)}
             />
           </View>
